@@ -58,6 +58,20 @@ jobs:
         shell: bash
         run: ./gradlew clean build -x test
 
+      - name: Install Windows packaging tools (Resource Hacker, Inno Setup, 7zip)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install -y resourcehacker innosetup 7zip
+          echo "C:\Program Files\Resource Hacker" >> $env:GITHUB_PATH
+
+      - name: Install macOS packaging tools (create-dmg)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew update
+          brew install create-dmg
+
       - name: Package (OS-specific)
         shell: bash
         run: |
