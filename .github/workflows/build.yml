@@ -210,7 +210,7 @@ jobs:
             cp -f "$f" release_files/
             found=$((found+1))
           done < <(find release_artifacts -type f \( \
-                     -name "OpenOSRS.exe" -o \
+                     -name "OpenOSRSSetup.exe" -o \
                      -name "OpenOSRS-*.dmg" -o \
                      -name "OpenOSRS*.AppImage" \
                    \) -print0)
