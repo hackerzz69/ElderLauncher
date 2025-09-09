@@ -69,7 +69,56 @@ jobs:
         shell: bash
         run: |
           echo "Running ${{ matrix.build_script }}"
-          ${{ matrix.build_script }}
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            # Allow macOS packaging script to fail (codesign/keychain or create-dmg issues)
+            ${{ matrix.build_script }} || echo "macOS packaging script failed; will attempt DMG creation manually."
+          else
+            ${{ matrix.build_script }}
+          fi
+
+      - name: Manually create DMG on macOS (fallback)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -e
+          # Determine app path and arch-specific output directory
+          APP_PATH=""
+          OUT_DIR=""
+          DMG_NAME=""
+          if [ "${{ matrix.arch }}" = "aarch64" ]; then
+            APP_PATH="native-osx-aarch64/OpenOSRS.app"
+            OUT_DIR="native-osx-aarch64"
+            DMG_NAME="OpenOSRS-aarch64.dmg"
+          else
+            APP_PATH="native-osx/OpenOSRS.app"
+            OUT_DIR="native-osx"
+            DMG_NAME="OpenOSRS-x64.dmg"
+          fi
+
+          if [ -f "${OUT_DIR}/${DMG_NAME}" ]; then
+            echo "DMG already exists at ${OUT_DIR}/${DMG_NAME}, skipping manual creation."
+            exit 0
+          fi
+
+          if [ ! -d "${APP_PATH}" ]; then
+            echo "Expected app bundle not found at ${APP_PATH}"
+            ls -la "${OUT_DIR}" || true
+            exit 1
+          fi
+
+          mkdir -p "${OUT_DIR}"
+          echo "Creating DMG ${OUT_DIR}/${DMG_NAME} from ${APP_PATH}"
+          # create-dmg syntax: create-dmg [options] output.dmg source_folder
+          create-dmg \
+            --overwrite \
+            --volname "OpenOSRS" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "OpenOSRS.app" 175 120 \
+            --app-drop-link 425 120 \
+            "${OUT_DIR}/${DMG_NAME}" \
+            "${OUT_DIR}"
 
       - name: Collect artifacts
         shell: bash
