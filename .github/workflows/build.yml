@@ -81,23 +81,25 @@ jobs:
           $cmd = (Get-Command ResourceHacker -ErrorAction SilentlyContinue) `
             ?? (Get-Command ResourceHacker.exe -ErrorAction SilentlyContinue) `
             ?? (Get-Command resourcehacker -ErrorAction SilentlyContinue)
-          if (-not $cmd) {
-            Write-Host "Resource Hacker not located on PATH; listing candidates..."
-            Get-ChildItem -Recurse -Filter *ResourceHacker*.exe -ErrorAction SilentlyContinue `
-              | Select-Object -First 10 `
-              | ForEach-Object { Write-Host "Found candidate: $($_.FullName)" }
-            # Don't hard-fail here; some scripts may not need it depending on branch
-            # If packaging needs it, the step will fail with a clearer message.
-          } else {
-            Write-Host "Resource Hacker available at $($cmd.Path)"
-          }
+          if ($cmd) { Write-Host "Resource Hacker available at $($cmd.Path)" } else { Write-Host "Resource Hacker not found on PATH; continuing." }
 
-      - name: Install macOS packaging tools (create-dmg)
-        if: runner.os == 'macOS'
-        shell: bash
+      - name: Fetch Visual C++ Redistributable (x64) for installer
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          brew update
-          brew install create-dmg
+          $ErrorActionPreference = 'Stop'
+          $dest = Join-Path $env:GITHUB_WORKSPACE 'vcredist_x64.exe'
+          if (Test-Path $dest) {
+            Write-Host "vcredist_x64.exe already present at $dest"
+          } else {
+            $url = 'https://aka.ms/vs/17/release/vc_redist.x64.exe'
+            Write-Host "Downloading VC++ Redistributable from $url to $dest"
+            Invoke-WebRequest -Uri $url -OutFile $dest
+            if (-not (Test-Path $dest)) {
+              throw "Failed to download vcredist_x64.exe"
+            }
+          }
+          Write-Host "VC++ Redistributable ready at $dest"
 
       - name: Package (OS-specific)
         shell: bash
