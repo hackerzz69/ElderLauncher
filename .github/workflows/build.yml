@@ -193,6 +193,35 @@ jobs:
         with:
           path: release_artifacts
 
+      - name: Gather only launcher files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release_files
+          echo "Collecting launcher files from downloaded artifacts..."
+
+          # Pick exact launchers we care about
+          # - Windows EXE
+          # - macOS DMGs (x64 and aarch64)
+          # - Linux AppImage (optional if your script produces it)
+          found=0
+          while IFS= read -r -d '' f; do
+            echo "Adding: $f"
+            cp -f "$f" release_files/
+            found=$((found+1))
+          done < <(find release_artifacts -type f \( \
+                     -name "OpenOSRS.exe" -o \
+                     -name "OpenOSRS-*.dmg" -o \
+                     -name "OpenOSRS*.AppImage" \
+                   \) -print0)
+
+          if [ "$found" -eq 0 ]; then
+            echo "No launcher files found. Contents of release_artifacts:"
+            find release_artifacts -maxdepth 3 -type f -printf "%P\n" || true
+            exit 1
+          fi
+          echo "Collected $found launcher file(s)."
+
       - name: Publish GitHub Release (create or update, replace assets)
         uses: ncipollo/release-action@v1
         with:
@@ -205,4 +234,4 @@ jobs:
           allowUpdates: true
           removeArtifacts: true
           artifactErrorsFailBuild: true
-          artifacts: "release_artifacts/**/*"
+          artifacts: "release_files/*"
