@@ -31,20 +31,31 @@ import java.awt.Color;
  */
 class ColorScheme
 {
-	/* The blue color used for the branding's accents */
-	static final Color BRAND_BLUE = new Color(25, 194, 255);
+	/* Brand accent color (modern gold) */
+	static final Color BRAND_BLUE = new Color(212, 175, 55); // re-themed to gold
 
-	/* The blue color used for the branding's accents, with lowered opacity */
-	static final Color BRAND_BLUE_TRANSPARENT = new Color(25, 194, 255, 120);
+	/* Brand accent with lowered opacity */
+	static final Color BRAND_BLUE_TRANSPARENT = new Color(212, 175, 55, 120); // re-themed to gold (transparent)
 
-
-	static final Color DARK_GRAY_COLOR = new Color(40, 40, 40);
-	static final Color DARKER_GRAY_COLOR = new Color(30, 30, 30);
-	static final Color MEDIUM_GRAY_COLOR = new Color(77, 77, 77);
+	/* Dark UI neutrals (modernized black/graphite) */
+	static final Color DARK_GRAY_COLOR = new Color(18, 18, 20);    // ~#121214
+	static final Color DARKER_GRAY_COLOR = new Color(10, 10, 12);  // ~#0A0A0C
+	static final Color MEDIUM_GRAY_COLOR = new Color(42, 42, 46);  // ~#2A2A2E
 
 	/* The background color of the scrollbar's track */
-	static final Color SCROLL_TRACK_COLOR = new Color(25, 25, 25);
+	static final Color SCROLL_TRACK_COLOR = new Color(20, 20, 22); // ~#141416
 
-	/* The color for the red progress bar (used in ge offers, farming tracker, etc)*/
+	/* The color for the red progress bar (used in ge offers, farming tracker, etc) */
 	static final Color PROGRESS_ERROR_COLOR = new Color(230, 30, 30);
+
+	/* Additional themed colors (optional use) */
+	static final Color BRAND_GOLD = new Color(212, 175, 55);
+	static final Color BRAND_GOLD_DARK = new Color(168, 138, 44);
+	static final Color TEXT_PRIMARY = new Color(235, 235, 235);
+	static final Color TEXT_MUTED = new Color(170, 170, 175);
+	static final Color BORDER_COLOR = new Color(36, 36, 40);
+	static final Color HOVER_BG = new Color(28, 28, 32);
+	static final Color SUCCESS_COLOR = new Color(48, 168, 92);
+	static final Color WARNING_COLOR = new Color(235, 180, 52);
+	static final Color PROGRESS_OK_COLOR = new Color(212, 175, 55); // gold progress/accent
 }
