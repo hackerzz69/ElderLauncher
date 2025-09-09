@@ -58,6 +58,13 @@ jobs:
         shell: bash
         run: ./gradlew clean build -x test
 
+      - name: Install macOS packaging tools (create-dmg)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew update
+          brew install create-dmg
+
       - name: Package (OS-specific)
         shell: bash
         run: |
