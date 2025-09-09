@@ -58,6 +58,13 @@ jobs:
         shell: bash
         run: ./gradlew clean build -x test
 
+      - name: Install Linux dependencies (FUSE for AppImage)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2
+
       - name: Install Windows packaging tools (7zip, Inno Setup, Resource Hacker via reshack)
         if: runner.os == 'Windows'
         shell: pwsh
