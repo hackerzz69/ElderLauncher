@@ -58,50 +58,32 @@ jobs:
         shell: bash
         run: ./gradlew clean build -x test
 
-      - name: Install Windows packaging tools (7zip, Inno Setup, Resource Hacker)
+      - name: Install Windows packaging tools (7zip, Inno Setup, Resource Hacker via reshack)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          choco feature enable -n=allowGlobalConfirmation
-          # Install 7zip and Inno Setup (ok if already installed)
-          choco install 7zip innosetup --no-progress --yes || $true
-
-          # Try to install Resource Hacker via Chocolatey (package may be named 'reshack')
-          $installed = $false
-          foreach ($pkg in @('resourcehacker','reshack','resourcehacker.portable')) {
-            try {
-              choco install $pkg --no-progress --yes
-              $installed = $true
-              break
-            } catch {
-              Write-Host "Failed to install $pkg via Chocolatey, trying next option..."
-            }
+          choco feature enable -n=allowGlobalConfirmation | Out-Null
+          choco install 7zip innosetup reshack --no-progress --yes
+          # Ensure Resource Hacker is on PATH
+          $paths = @(
+            'C:\ProgramData\chocolatey\lib\reshack\tools',
+            'C:\Program Files\Resource Hacker'
+          ) | Where-Object { Test-Path $_ }
+          foreach ($p in $paths) {
+            "$p" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            Write-Host "Added to PATH: $p"
           }
-
-          # Fallback: download portable Resource Hacker zip directly and add to PATH
-          if (-not $installed) {
-            $zipUrl = 'https://www.angusj.com/resourcehacker/resource_hacker.zip'
-            $zipPath = Join-Path $env:RUNNER_TEMP 'resource_hacker.zip'
-            $destDir = Join-Path $env:RUNNER_TEMP 'ResourceHacker'
-            Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
-            if (Test-Path $destDir) { Remove-Item -Recurse -Force $destDir }
-            New-Item -ItemType Directory -Path $destDir | Out-Null
-            Add-Type -AssemblyName System.IO.Compression.FileSystem
-            [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $destDir)
-            # Add to PATH for subsequent steps
-            "$destDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-            Write-Host "Resource Hacker extracted to $destDir"
-          } else {
-            # Try common install locations
-            $paths = @(
-              'C:\Program Files\Resource Hacker',
-              'C:\ProgramData\chocolatey\lib\resourcehacker\tools',
-              'C:\ProgramData\chocolatey\lib\reshack\tools'
-            ) | Where-Object { Test-Path $_ }
-            foreach ($p in $paths) { "$p" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append }
-            Write-Host "Resource Hacker available via Chocolatey."
+          # Verify availability
+          $cmd = (Get-Command ResourceHacker.exe -ErrorAction SilentlyContinue) `
+            ?? (Get-Command resourcehacker.exe -ErrorAction SilentlyContinue)
+          if (-not $cmd) {
+            Get-ChildItem -Recurse -Filter *ResourceHacker*.exe -ErrorAction SilentlyContinue `
+              | Select-Object -First 10 `
+              | ForEach-Object { Write-Host "Found candidate: $($_.FullName)" }
+            throw "Resource Hacker not found in PATH after installing reshack."
           }
+          Write-Host "Resource Hacker available at $($cmd.Path)"
 
       - name: Install macOS packaging tools (create-dmg)
         if: runner.os == 'macOS'
