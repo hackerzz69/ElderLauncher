@@ -8,12 +8,12 @@
 !include "MUI2.nsh"
 
 # Match icons/images exactly
-!define MUI_ICON "openosrs.ico"
-!define MUI_UNICON "openosrs.ico"
+!define MUI_ICON "..\openosrs.ico"
+!define MUI_UNICON "..\openosrs.ico"
 !define MUI_HEADERIMAGE
 !define MUI_HEADERIMAGE_RIGHT
-!define MUI_HEADERIMAGE_BITMAP "innosetup\openosrs_small.bmp"
-!define MUI_WELCOMEFINISHPAGE_BITMAP "innosetup\openosrs_small.bmp"
+!define MUI_HEADERIMAGE_BITMAP "..\innosetup\openosrs_small.bmp"
+!define MUI_WELCOMEFINISHPAGE_BITMAP "..\innosetup\openosrs_small.bmp"
 
 # Installer meta
 Name "${APP_NAME}"
