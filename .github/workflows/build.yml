@@ -61,55 +61,25 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libfuse2
 
-      - name: Install Windows packaging tools (7zip, Inno Setup, Resource Hacker via reshack)
+      - name: Install NSIS (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          choco feature enable -n=allowGlobalConfirmation | Out-Null
-          choco install 7zip innosetup reshack --no-progress --yes
+          choco install nsis --no-progress --yes
+          echo "NSIS installed successfully"
 
-          # Add common install locations for Resource Hacker to PATH
-          $paths = @(
-            'C:\Program Files (x86)\Resource Hacker',
-            'C:\Program Files\Resource Hacker',
-            'C:\ProgramData\chocolatey\lib\reshack\tools'
-          ) | Where-Object { Test-Path $_ }
-          foreach ($p in $paths) {
-            "$p" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-            Write-Host "Added to PATH: $p"
-          }
-
-          # Verify availability (case-insensitive; PATHEXT resolves .exe)
-          $cmd = (Get-Command ResourceHacker -ErrorAction SilentlyContinue) `
-            ?? (Get-Command ResourceHacker.exe -ErrorAction SilentlyContinue) `
-            ?? (Get-Command resourcehacker -ErrorAction SilentlyContinue)
-          if ($cmd) { Write-Host "Resource Hacker available at $($cmd.Path)" } else { Write-Host "Resource Hacker not found on PATH; continuing." }
-
-      - name: Fetch Visual C++ Redistributable (x64) for installer
+      - name: Build NSIS installer (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $dest = Join-Path $env:GITHUB_WORKSPACE 'vcredist_x64.exe'
-          if (Test-Path $dest) {
-            Write-Host "vcredist_x64.exe already present at $dest"
-          } else {
-            $url = 'https://aka.ms/vs/17/release/vc_redist.x64.exe'
-            Write-Host "Downloading VC++ Redistributable from $url to $dest"
-            Invoke-WebRequest -Uri $url -OutFile $dest
-            if (-not (Test-Path $dest)) {
-              throw "Failed to download vcredist_x64.exe"
-            }
-          }
-          Write-Host "VC++ Redistributable ready at $dest"
+          makensis openosrs_launcher.nsi
 
       - name: Package (OS-specific)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           echo "Running ${{ matrix.build_script }}"
           if [ "${{ runner.os }}" = "macOS" ]; then
-            # Allow macOS packaging script to fail (codesign/keychain or dmg tool issues)
             ${{ matrix.build_script }} || echo "macOS packaging script failed; will attempt DMG creation manually."
           else
             ${{ matrix.build_script }}
@@ -120,7 +90,6 @@ jobs:
         shell: bash
         run: |
           set -e
-          # Determine app path and arch-specific output directory
           if [ "${{ matrix.arch }}" = "aarch64" ]; then
             APP_PATH="native-osx-aarch64/OpenOSRS.app"
             OUT_DIR="native-osx-aarch64"
@@ -130,42 +99,30 @@ jobs:
             OUT_DIR="native-osx"
             DMG_NAME="OpenOSRS-x64.dmg"
           fi
-
-          # If DMG already exists (script succeeded), skip
           if [ -f "${OUT_DIR}/${DMG_NAME}" ]; then
             echo "DMG already exists at ${OUT_DIR}/${DMG_NAME}, skipping manual creation."
             exit 0
           fi
-
-          # Ensure the .app bundle exists
           if [ ! -d "${APP_PATH}" ]; then
             echo "Expected app bundle not found at ${APP_PATH}"
             ls -la "${OUT_DIR}" || true
             exit 1
           fi
-
-          # Prepare a staging folder for DMG contents
           STAGING="${OUT_DIR}/dmg_src"
           rm -rf "${STAGING}"
           mkdir -p "${STAGING}"
           cp -R "${APP_PATH}" "${STAGING}/"
-          # Create Applications symlink for user convenience
           ln -s /Applications "${STAGING}/Applications" || true
-
           echo "Creating DMG ${OUT_DIR}/${DMG_NAME} from ${STAGING}"
-          # Create compressed DMG
           hdiutil create -volname "OpenOSRS" -srcfolder "${STAGING}" -ov -format UDZO "${OUT_DIR}/${DMG_NAME}"
-
           echo "DMG created at ${OUT_DIR}/${DMG_NAME}"
 
       - name: Collect artifacts
         shell: bash
         run: |
           mkdir -p artifacts
-          # Common output folders (adjust if your scripts output elsewhere)
           cp -rv build/* artifacts/ 2>/dev/null || true
           cp -rv dist/* artifacts/ 2>/dev/null || true
-          # Common installer/bundle formats
           find . -maxdepth 3 -type f \( \
             -name "*.exe" -o -name "*.msi" -o -name "*.zip" -o \
             -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o \
@@ -195,7 +152,6 @@ jobs:
           set -euo pipefail
           mkdir -p release_files
           echo "Collecting launcher files from downloaded artifacts..."
-          
           found=0
           while IFS= read -r -d '' f; do
             echo "Adding: $f"
@@ -206,7 +162,6 @@ jobs:
                      -name "OpenOSRS-*.dmg" -o \
                      -name "OpenOSRS*.AppImage" \
                    \) -print0)
-          
           if [ "$found" -eq 0 ]; then
             echo "No launcher files found. Contents of release_artifacts:"
             find release_artifacts -maxdepth 3 -type f -printf "%P\n" || true
