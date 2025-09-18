@@ -80,11 +80,11 @@ tasks {
     processResources {
         val tokens = mapOf(
                 "basedir"         to project.projectDir.path,
-                "finalName"       to "OpenOSRS",
+                "finalName"       to "Elder",
                 "artifact"        to "launcher",
                 "project.version" to project.version,
                 "project.group"   to project.group,
-                "description"     to "OpenOSRS launcher"
+                "description"     to "Elder launcher"
         )
 
         doLast {
