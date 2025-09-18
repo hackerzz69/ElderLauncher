@@ -1,173 +1,227 @@
-name: Cross-OS Build
+name: Cross-OS Build   # Name of the GitHub Actions workflow
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*'   # Triggers only when a tag starting with "v" is pushed (e.g., v1.0.0)
 
 jobs:
-  # -------------------
-  # 1) Build JARs on Linux
-  # -------------------
-  build-linux:
-    runs-on: ubuntu-latest
+  build:
+    name: Build on ${{ matrix.os }} (${{ matrix.arch }})   # Job name shown in Actions UI
+    runs-on: ${{ matrix.os }}   # Each job runs on the OS defined in the matrix
+    strategy:
+      fail-fast: false   # Prevents canceling all jobs if one matrix job fails
+      matrix:
+        include:   # Defines the OS/arch combinations to build on
+          - os: windows-latest
+            arch: x64
+            build_script: ./build-win64.sh
+          - os: ubuntu-latest
+            arch: x86_64
+            build_script: ./build-linux-x86_64.sh
+          - os: macos-latest
+            arch: x64
+            build_script: ./build-osx-x64.sh
+          - os: macos-latest
+            arch: aarch64
+            build_script: ./build-osx-aarch64.sh
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4   # Pulls down the repo source code
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v4   # Installs Java 17 for builds
         with:
-          distribution: temurin
+          distribution: temurin       # OpenJDK from Eclipse Temurin
           java-version: '17'
-          cache: gradle
+          cache: gradle               # Cache Gradle dependencies
 
-      - name: Make gradlew executable
-        run: chmod +x gradlew
+      - name: Make scripts executable (non-Windows)
+        if: runner.os != 'Windows'   # Only runs on Linux/macOS
+        shell: bash
+        run: |
+          chmod +x gradlew           # Ensure gradlew is executable
+          chmod +x build-*.sh        # Ensure build scripts are executable
 
-      - name: Gradle build
-        run: ./gradlew clean build -x test
+      - name: Gradle build (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\gradlew.bat clean build -x test   # Windows Gradle build
 
-      - name: Upload JARs
-        uses: actions/upload-artifact@v4
-        with:
-          name: launcher-jars
-          path: build/libs/*.jar
+      - name: Gradle build (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./gradlew clean build -x test       # Unix Gradle build
 
-  # -------------------
-  # 2) Windows Packaging (Inno + packr + reshack)
-  # -------------------
-  package-windows:
-    needs: build-linux
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Install Linux dependencies (FUSE for AppImage)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2   # Required for AppImage packaging
 
-      - name: Download JARs
-        uses: actions/download-artifact@v4
-        with:
-          name: launcher-jars
-          path: native-win64
-
-      - name: Install Windows packaging tools
+      - name: Install Windows packaging tools (7zip, Inno Setup, Resource Hacker via reshack)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           choco feature enable -n=allowGlobalConfirmation | Out-Null
-          choco install 7zip innosetup reshack --no-progress --yes
+          choco install 7zip innosetup reshack --no-progress --yes   # Install tools
 
-          # Add Resource Hacker to PATH
-          $reshacker = "C:\ProgramData\chocolatey\lib\reshack\tools"
-          echo $reshacker | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          # Add common install locations for Resource Hacker to PATH
+          $paths = @(
+            'C:\Program Files (x86)\Resource Hacker',
+            'C:\Program Files\Resource Hacker',
+            'C:\ProgramData\chocolatey\lib\reshack\tools'
+          ) | Where-Object { Test-Path $_ }
+          foreach ($p in $paths) {
+            "$p" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            Write-Host "Added to PATH: $p"
+          }
 
-      - name: Run Windows build script (packr + Inno)
+          # Verify availability (case-insensitive; PATHEXT resolves .exe)
+          $cmd = (Get-Command ResourceHacker -ErrorAction SilentlyContinue) ?? (Get-Command ResourceHacker.exe -ErrorAction SilentlyContinue) ?? (Get-Command resourcehacker -ErrorAction SilentlyContinue)
+          if ($cmd) { Write-Host "Resource Hacker available at $($cmd.Path)" } else { Write-Host "Resource Hacker not found on PATH; continuing." }
+
+      - name: Fetch Visual C++ Redistributable (x64) for installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dest = Join-Path $env:GITHUB_WORKSPACE 'vcredist_x64.exe'
+          if (Test-Path $dest) {
+            Write-Host "vcredist_x64.exe already present at $dest"
+          } else {
+            $url = 'https://aka.ms/vs/17/release/vc_redist.x64.exe'
+            Write-Host "Downloading VC++ Redistributable from $url to $dest"
+            Invoke-WebRequest -Uri $url -OutFile $dest
+            if (-not (Test-Path $dest)) {
+              throw "Failed to download vcredist_x64.exe"
+            }
+          }
+          Write-Host "VC++ Redistributable ready at $dest"
+
+      - name: Package (OS-specific)
         shell: bash
-        run: ./build-win64.sh
+        run: |
+          echo "Running ${{ matrix.build_script }}"
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            # Allow macOS packaging script to fail gracefully
+            ${{ matrix.build_script }} || echo "macOS packaging script failed; will attempt DMG creation manually."
+          else
+            ${{ matrix.build_script }}
+          fi
 
-      - name: Upload Windows installer
+      - name: Manually create DMG on macOS (fallback via hdiutil)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -e
+          # Determine app path and arch-specific output directory
+          if [ "${{ matrix.arch }}" = "aarch64" ]; then
+            APP_PATH="native-osx-aarch64/OpenOSRS.app"
+            OUT_DIR="native-osx-aarch64"
+            DMG_NAME="OpenOSRS-aarch64.dmg"
+          else
+            APP_PATH="native-osx/OpenOSRS.app"
+            OUT_DIR="native-osx"
+            DMG_NAME="OpenOSRS-x64.dmg"
+          fi
+
+          # If DMG already exists (script succeeded), skip
+          if [ -f "${OUT_DIR}/${DMG_NAME}" ]; then
+            echo "DMG already exists at ${OUT_DIR}/${DMG_NAME}, skipping manual creation."
+            exit 0
+          fi
+
+          # Ensure the .app bundle exists
+          if [ ! -d "${APP_PATH}" ]; then
+            echo "Expected app bundle not found at ${APP_PATH}"
+            ls -la "${OUT_DIR}" || true
+            exit 1
+          fi
+
+          # Prepare a staging folder for DMG contents
+          STAGING="${OUT_DIR}/dmg_src"
+          rm -rf "${STAGING}"
+          mkdir -p "${STAGING}"
+          cp -R "${APP_PATH}" "${STAGING}/"
+          # Create Applications symlink for user convenience
+          ln -s /Applications "${STAGING}/Applications" || true
+
+          echo "Creating DMG ${OUT_DIR}/${DMG_NAME} from ${STAGING}"
+          # Create compressed DMG
+          hdiutil create -volname "OpenOSRS" -srcfolder "${STAGING}" -ov -format UDZO "${OUT_DIR}/${DMG_NAME}"
+
+          echo "DMG created at ${OUT_DIR}/${DMG_NAME}"
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          # Collect build/dist outputs if present
+          cp -rv build/* artifacts/ 2>/dev/null || true
+          cp -rv dist/* artifacts/ 2>/dev/null || true
+          # Collect all common installer/bundle formats
+          find . -maxdepth 3 -type f \( \
+            -name "*.exe" -o -name "*.msi" -o -name "*.zip" -o \
+            -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o \
+            -name "*.dmg" -o -name "*.pkg" -o -name "*.tar.gz" \
+          \) -exec cp -v {} artifacts/ \; || true
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-installer
-          path: OpenOSRSSetup.exe
+          name: ${{ runner.os }}-${{ matrix.arch }}-artifacts   # Artifact name includes OS and arch
+          path: artifacts
+          if-no-files-found: warn   # Do not fail if artifacts are missing
 
-  # -------------------
-  # 3) macOS Packaging
-  # -------------------
-  package-macos:
-    needs: build-linux
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        arch: [x64, aarch64]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download JARs
-        uses: actions/download-artifact@v4
-        with:
-          name: launcher-jars
-          path: native-osx
-
-      - name: Make scripts executable
-        run: chmod +x build-osx-*.sh
-
-      - name: Run macOS packaging
-        run: ./build-osx-${{ matrix.arch }}.sh || echo "macOS packaging failed"
-
-      - name: Upload macOS installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-${{ matrix.arch }}-installer
-          path: "native-osx*/OpenOSRS-*.dmg"
-
-  # -------------------
-  # 4) Linux Packaging
-  # -------------------
-  package-linux:
-    needs: build-linux
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download JARs
-        uses: actions/download-artifact@v4
-        with:
-          name: launcher-jars
-          path: native-linux
-
-      - name: Make scripts executable
-        run: chmod +x build-linux-*.sh
-
-      - name: Run Linux packaging
-        run: ./build-linux-x86_64.sh || echo "Linux packaging failed"
-
-      - name: Upload Linux installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-installer
-          path: |
-            native-linux/*.AppImage
-            native-linux/*.deb
-            native-linux/*.rpm
-            native-linux/*.tar.gz
-
-  # -------------------
-  # 5) Release
-  # -------------------
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [package-windows, package-macos, package-linux]
+    if: startsWith(github.ref, 'refs/tags/v')   # Only runs for version tags
+    needs: [ build ]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: release_artifacts
+          path: release_artifacts   # All artifacts downloaded here
 
-      - name: Gather installers
+      - name: Gather only launcher files
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p release_files
-          find release_artifacts -type f \( \
-            -name "OpenOSRSSetup.exe" -o \
-            -name "OpenOSRS-*.dmg" -o \
-            -name "OpenOSRS*.AppImage" -o \
-            -name "*.deb" -o \
-            -name "*.rpm" -o \
-            -name "*.tar.gz" \
-          \) -exec cp -v {} release_files/ \;
+          echo "Collecting launcher files from downloaded artifacts..."
+          
+          found=0
+          while IFS= read -r -d '' f; do
+            echo "Adding: $f"
+            cp -f "$f" release_files/
+            found=$((found+1))
+          done < <(find release_artifacts -type f \( \
+                     -name "OpenOSRSSetup.exe" -o \
+                     -name "OpenOSRS-*.dmg" -o \
+                     -name "OpenOSRS*.AppImage" \
+                   \) -print0)
+          
+          if [ "$found" -eq 0 ]; then
+            echo "No launcher files found. Contents of release_artifacts:"
+            find release_artifacts -maxdepth 3 -type f -printf "%P\n" || true
+            exit 1
+          fi
+          echo "Collected $found launcher file(s)."
 
-      - name: Publish GitHub Release
+      - name: Publish GitHub Release (create or update, replace assets)
         uses: ncipollo/release-action@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}   # Auth token to publish release
+          tag: ${{ github.ref_name }}          # Release tag name
+          name: ${{ github.ref_name }}         # Release title
           draft: false
           prerelease: false
-          generateReleaseNotes: true
-          allowUpdates: true
-          removeArtifacts: true
-          artifactErrorsFailBuild: true
-          artifacts: "release_files/*"
+          generateReleaseNotes: true           # Auto-generate release notes
+          allowUpdates: true                   # Update existing release if needed
+          removeArtifacts: true                # Clean old artifacts
+          artifactErrorsFailBuild: true        # Fail build if artifact upload fails
+          artifacts: "release_files/*"         # Attach these files to release
