@@ -1,10 +1,10 @@
 [Setup]
-AppName=OpenOSRS Launcher
-AppPublisher=OpenOSRS
-UninstallDisplayName=OpenOSRS
+AppName=Elder Launcher
+AppPublisher=Elder
+UninstallDisplayName=Elder
 AppVersion=@project.version@
-AppSupportURL=https://openosrs.com/
-DefaultDirName={localappdata}\OpenOSRS
+AppSupportURL=https://www.elderrsps.com/
+DefaultDirName={localappdata}\Elder
 ; vcredist queues files to be replaced at next reboot, however it doesn't seem to matter
 RestartIfNeededByRun=no
 
@@ -15,39 +15,39 @@ PrivilegesRequired=lowest
 
 WizardSmallImageFile=@basedir@/innosetup/openosrs_small.bmp
 SetupIconFile=@basedir@/openosrs.ico
-UninstallDisplayIcon={app}\OpenOSRS.exe
+UninstallDisplayIcon={app}\Elder.exe
 
 Compression=lzma2
 SolidCompression=yes
 
 OutputDir=@basedir@
-OutputBaseFilename=OpenOSRSSetup
+OutputBaseFilename=ElderSetup
 
 [Tasks]
 Name: DesktopIcon; Description: "Create a &desktop icon";
 
 [Files]
-Source: "@basedir@\native-win64\OpenOSRS.exe"; DestDir: "{app}"
-Source: "@basedir@\native-win64\OpenOSRS-shaded.jar"; DestDir: "{app}"
+Source: "@basedir@\native-win64\Elder.exe"; DestDir: "{app}"
+Source: "@basedir@\native-win64\Elder-shaded.jar"; DestDir: "{app}"
 Source: "@basedir@\native-win64\config.json"; DestDir: "{app}"
 Source: "@basedir@\native-win64\jre\*"; DestDir: "{app}\jre"; Flags: recursesubdirs
 Source: "@basedir@\vcredist_x64.exe"; DestDir: {tmp}; Flags: deleteafterinstall
 
 [Icons]
 ; start menu
-Name: "{userprograms}\OpenOSRS"; Filename: "{app}\OpenOSRS.exe"
-Name: "{userdesktop}\OpenOSRS"; Filename: "{app}\OpenOSRS.exe"; Tasks: DesktopIcon
+Name: "{userprograms}\Elder"; Filename: "{app}\Elder.exe"
+Name: "{userdesktop}\Elder"; Filename: "{app}\Elder.exe"; Tasks: DesktopIcon
 
 [Run]
 Filename: "{tmp}\vcredist_x64.exe"; Check: VCRedistNeedsInstall; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing VC++ 2015 (x64) Redistributables..."
-Filename: "{app}\OpenOSRS.exe"; Description: "&Open OpenOSRS"; Flags: postinstall skipifsilent nowait
+Filename: "{app}\Elder.exe"; Description: "&Open Elder"; Flags: postinstall skipifsilent nowait
 
 [InstallDelete]
 ; Delete the old jvm so it doesn't try to load old stuff with the new vm and crash
 Type: filesandordirs; Name: "{app}"
 
 [UninstallDelete]
-Type: filesandordirs; Name: "{%USERPROFILE}\.openosrs\repository2"
+Type: filesandordirs; Name: "{%USERPROFILE}\.elder\repository2"
 
 ; Code to check if installing the redistributables is necessary - https://stackoverflow.com/a/11172939/7189686
 [Code]
