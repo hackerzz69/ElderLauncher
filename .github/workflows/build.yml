@@ -14,8 +14,14 @@ jobs:
       matrix:
         include:   # Defines the OS/arch combinations to build on
           - os: windows-latest
+            arch: x86
+            build_script: ./build-win32.sh
+          - os: windows-latest
             arch: x64
             build_script: ./build-win64.sh
+          - os: ubuntu-latest
+            arch: aarch64
+            build_script: ./build-linux-aarch64.sh
           - os: ubuntu-latest
             arch: x86_64
             build_script: ./build-linux-x86_64.sh
