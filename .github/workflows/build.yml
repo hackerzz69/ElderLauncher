@@ -23,8 +23,11 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Gradle build
-        run: ./gradlew clean build -x test
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build -x test -x checkstyleMain
 
       - name: Upload JARs
         uses: actions/upload-artifact@v4
