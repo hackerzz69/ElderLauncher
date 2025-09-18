@@ -90,23 +90,31 @@ jobs:
           $cmd = (Get-Command ResourceHacker -ErrorAction SilentlyContinue) ?? (Get-Command ResourceHacker.exe -ErrorAction SilentlyContinue) ?? (Get-Command resourcehacker -ErrorAction SilentlyContinue)
           if ($cmd) { Write-Host "Resource Hacker available at $($cmd.Path)" } else { Write-Host "Resource Hacker not found on PATH; continuing." }
 
-      - name: Fetch Visual C++ Redistributable (x64) for installer
+      - name: Fetch Visual C++ Redistributables (x64 & x86) for installer
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $dest = Join-Path $env:GITHUB_WORKSPACE 'vcredist_x64.exe'
-          if (Test-Path $dest) {
-            Write-Host "vcredist_x64.exe already present at $dest"
-          } else {
-            $url = 'https://aka.ms/vs/17/release/vc_redist.x64.exe'
-            Write-Host "Downloading VC++ Redistributable from $url to $dest"
-            Invoke-WebRequest -Uri $url -OutFile $dest
-            if (-not (Test-Path $dest)) {
-              throw "Failed to download vcredist_x64.exe"
-            }
+
+          $urls = @{
+            "vcredist_x64.exe" = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+            "vcredist_x86.exe" = "https://aka.ms/vs/17/release/vc_redist.x86.exe"
           }
-          Write-Host "VC++ Redistributable ready at $dest"
+
+          foreach ($file in $urls.Keys) {
+            $dest = Join-Path $env:GITHUB_WORKSPACE $file
+            if (Test-Path $dest) {
+              Write-Host "$file already present at $dest"
+            } else {
+              $url = $urls[$file]
+              Write-Host "Downloading $file from $url"
+              Invoke-WebRequest -Uri $url -OutFile $dest
+              if (-not (Test-Path $dest)) {
+                throw "Failed to download $file"
+              }
+            }
+            Write-Host "$file ready at $dest"
+          }
 
       - name: Package (OS-specific)
         shell: bash
