@@ -33,7 +33,7 @@ jobs:
           path: build/libs/*.jar
 
   # -------------------
-  # 2) Windows Packaging
+  # 2) Windows Packaging (NSIS)
   # -------------------
   package-windows:
     needs: build-linux
@@ -93,7 +93,6 @@ jobs:
       - name: Run macOS packaging
         run: ./build-osx-${{ matrix.arch }}.sh || echo "macOS packaging script failed"
 
-
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
@@ -101,7 +100,7 @@ jobs:
           path: "native-osx*/OpenOSRS-*.dmg"
 
   # -------------------
-  # 4) Linux Packaging (optional AppImage/DEB/RPM)
+  # 4) Linux Packaging (AppImage/DEB/RPM)
   # -------------------
   package-linux:
     needs: build-linux
