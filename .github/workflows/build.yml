@@ -7,10 +7,9 @@ on:
 
 jobs:
   # -------------------
-  # 1) Build once on Linux
+  # 1) Build JARs on Linux
   # -------------------
   build-linux:
-    name: Gradle Build (Linux)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -26,8 +25,8 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Build with Gradle
-        run: ./gradlew build -x test -x checkstyleMain
+      - name: Gradle build
+        run: ./gradlew clean build -x test
 
       - name: Upload JARs
         uses: actions/upload-artifact@v4
@@ -36,7 +35,7 @@ jobs:
           path: build/libs/*.jar
 
   # -------------------
-  # 2) Windows Packaging (NSIS)
+  # 2) Windows Packaging (Inno + packr + reshack)
   # -------------------
   package-windows:
     needs: build-linux
@@ -45,31 +44,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download jars
+      - name: Download JARs
         uses: actions/download-artifact@v4
         with:
           name: launcher-jars
           path: native-win64
 
-      - name: Install NSIS
-        run: choco install nsis --yes --no-progress
-
-      - name: Build NSIS installer
+      - name: Install Windows packaging tools
         shell: pwsh
         run: |
-          $nsisPath = 'C:\Program Files (x86)\NSIS'
-          $scriptPath = Join-Path $env:GITHUB_WORKSPACE "nsis\openosrs_launcher.nsi"
-          if (-Not (Test-Path $scriptPath)) {
-            Write-Error "NSIS script not found at $scriptPath"
-            exit 1
-          }
-          & "$nsisPath\makensis.exe" $scriptPath
+          choco feature enable -n=allowGlobalConfirmation | Out-Null
+          choco install 7zip innosetup reshack --no-progress --yes
+
+          # Add Resource Hacker to PATH
+          $reshacker = "C:\ProgramData\chocolatey\lib\reshack\tools"
+          echo $reshacker | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Run Windows build script (packr + Inno)
+        shell: bash
+        run: ./build-win64.sh
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
           name: windows-installer
-          path: nsis/OpenOSRSSetup.exe
+          path: OpenOSRSSetup.exe
 
   # -------------------
   # 3) macOS Packaging
@@ -84,26 +83,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download jars
+      - name: Download JARs
         uses: actions/download-artifact@v4
         with:
           name: launcher-jars
           path: native-osx
 
-      - name: Make build scripts executable
+      - name: Make scripts executable
         run: chmod +x build-osx-*.sh
 
       - name: Run macOS packaging
-        run: ./build-osx-${{ matrix.arch }}.sh || echo "macOS packaging script failed"
+        run: ./build-osx-${{ matrix.arch }}.sh || echo "macOS packaging failed"
 
-      - name: Upload macOS artifact
+      - name: Upload macOS installer
         uses: actions/upload-artifact@v4
         with:
           name: macos-${{ matrix.arch }}-installer
           path: "native-osx*/OpenOSRS-*.dmg"
 
   # -------------------
-  # 4) Linux Packaging (AppImage/DEB/RPM)
+  # 4) Linux Packaging
   # -------------------
   package-linux:
     needs: build-linux
@@ -112,19 +111,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download jars
+      - name: Download JARs
         uses: actions/download-artifact@v4
         with:
           name: launcher-jars
           path: native-linux
 
-      - name: Make build scripts executable
+      - name: Make scripts executable
         run: chmod +x build-linux-*.sh
 
       - name: Run Linux packaging
         run: ./build-linux-x86_64.sh || echo "Linux packaging failed"
 
-      - name: Upload Linux artifact
+      - name: Upload Linux installer
         uses: actions/upload-artifact@v4
         with:
           name: linux-installer
@@ -147,7 +146,7 @@ jobs:
         with:
           path: release_artifacts
 
-      - name: Gather launcher files
+      - name: Gather installers
         run: |
           mkdir -p release_files
           find release_artifacts -type f \( \
