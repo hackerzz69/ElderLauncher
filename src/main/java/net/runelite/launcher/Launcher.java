@@ -82,7 +82,7 @@ public class Launcher
 	static final String USER_AGENT = "OpenOSRS/" + LauncherProperties.getVersion();
 	private static boolean nightly = false;
 	private static boolean staging = false;
-	private static boolean stable = false;
+	private static boolean stable = true;
 
 	static final String CLIENT_MAIN_CLASS = "net.runelite.client.RuneLite";
 
@@ -118,7 +118,7 @@ public class Launcher
 		{
 		}
 
-		boolean askmode = Optional.ofNullable(prop.getProperty("openosrs.askMode")).map(Boolean::valueOf).orElse(true);
+		boolean askmode = Optional.ofNullable(prop.getProperty("openosrs.askMode")).map(Boolean::valueOf).orElse(false);
 		String bootstrapMode = prop.getProperty("openosrs.bootstrapMode");
 		boolean disableHw = Boolean.parseBoolean(prop.getProperty("openosrs.disableHw"));
 
